@@ -1,0 +1,263 @@
+<!doctype html>
+<!-- Keep this file static. Vue compiles it as a template, so data written into it by the
+     server could run as code. Everything dynamic comes from /api as JSON. -->
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SSH CA</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.7.46/daisyui.css" integrity="sha384-bbGkD3MAh/9AO9eBt/6ReKyGTu78VjNCrlo1uLqxHFOrFr8lRuS4H0sC04ucGill" crossorigin="anonymous">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3/dist/index.global.js" integrity="sha384-2ql948lIdLcGEE0/qxNiudyTjgauA3RDJERu5xW75kFCvSl5a9odyQYCb6tEjnmB" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue@3.5.43/dist/vue.global.prod.js" integrity="sha384-EAm39cvdifYiZjQQxCxStLasDodQMYokBrN5XPuJ7aC/JsQ4vyEUCy/+6hXpcBOW" crossorigin="anonymous" defer></script>
+<script src="/app.js" defer></script>
+<style>
+  [v-cloak] { display: none; }
+  [data-theme=light] {
+    --color-base-100: #fff; --color-base-200: #f4f4f7; --color-base-300: #dcdbe6; --color-base-content: #111114;
+    --color-neutral: #0b0b0f; --color-neutral-content: #fff;
+    --color-primary: #6c2bff; --color-primary-content: #fff;
+    --radius-box: 2rem; --radius-field: 1rem; --radius-selector: 1rem;
+  }
+</style>
+<style type="text/tailwindcss">
+  /* DaisyUI's prebuilt CSS covers only some colour utilities. Registering its colours with
+     Tailwind lets the browser build generate the rest, such as has-checked:bg-neutral. */
+  @theme inline {
+    --color-primary: var(--color-primary); --color-primary-content: var(--color-primary-content);
+    --color-neutral: var(--color-neutral); --color-neutral-content: var(--color-neutral-content);
+    --color-base-100: var(--color-base-100); --color-base-200: var(--color-base-200);
+    --color-base-300: var(--color-base-300); --color-base-content: var(--color-base-content);
+  }
+</style>
+</head>
+<body class="min-h-screen bg-base-300 p-3 antialiased sm:p-6">
+<div id="app" v-cloak>
+
+<main v-if="ready && !me" class="mx-auto mt-[12vh] max-w-sm rounded-box bg-base-100 p-8">
+  <div class="flex items-center gap-2"><logo></logo></div>
+  <h1 class="mt-8 text-3xl font-semibold tracking-tight">Sign in</h1>
+  <p class="mt-1 text-sm text-base-content/60">Use your password and the code from your authenticator app.</p>
+  <div v-if="error" role="alert" class="alert alert-error alert-soft mt-6">{{ error }}</div>
+  <form @submit.prevent="login" class="mt-6 space-y-4">
+    <label class="block"><span class="text-sm text-base-content/70">Username</span>
+      <input v-model="loginForm.user" autocomplete="username" required class="input mt-1 w-full border-0 bg-base-200"></label>
+    <label class="block"><span class="text-sm text-base-content/70">Password</span>
+      <input v-model="loginForm.password" type="password" autocomplete="current-password" required class="input mt-1 w-full border-0 bg-base-200"></label>
+    <label class="block"><span class="text-sm text-base-content/70">Authenticator code</span>
+      <input v-model="loginForm.code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required class="input mt-1 w-full border-0 bg-base-200 font-mono tracking-[0.4em]"></label>
+    <button :disabled="busy" class="btn btn-neutral btn-lg mt-2 w-full rounded-2xl">Sign in</button>
+  </form>
+</main>
+
+<div v-if="me" class="mx-auto max-w-6xl space-y-4">
+
+<header class="flex items-center justify-between gap-2 rounded-box bg-base-100 px-4 py-3 sm:gap-4 sm:px-7 sm:py-4">
+  <a href="#" class="flex items-center gap-2"><logo></logo></a>
+  <nav class="flex rounded-full bg-base-200 p-1 text-sm">
+    <a v-for="t in tabs" :key="t.id" :href="'#' + t.id" class="rounded-full px-3 py-2 sm:px-5"
+       :class="view === t.id ? 'bg-neutral text-neutral-content' : 'hover:bg-base-300/60'">{{ t.label }}</a>
+  </nav>
+  <div class="flex items-center gap-3">
+    <span class="hidden size-10 place-items-center rounded-full bg-primary/15 font-semibold uppercase text-primary sm:grid">{{ me.name[0] }}</span>
+    <span class="hidden text-sm font-medium sm:block">{{ me.name }}</span>
+    <button @click="logout" class="btn btn-circle btn-ghost" title="Log out" aria-label="Log out"><icon name="logout"></icon></button>
+  </div>
+</header>
+
+<div v-if="error" role="alert" class="alert alert-error alert-soft rounded-box">
+  <span>{{ error }}</span><button @click="error = ''" class="btn btn-sm btn-ghost">Dismiss</button>
+</div>
+
+<!-- Dashboard -->
+<template v-if="view === 'dashboard'">
+
+<section v-if="signed" class="rounded-box bg-primary p-6 text-primary-content sm:p-8">
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <span class="badge border-0 bg-white/20 text-primary-content">New certificate</span>
+      <h2 class="mt-3 text-2xl font-semibold tracking-tight">Save this as <code class="font-mono">~/.ssh/{{ signed.file }}</code></h2>
+      <p class="mt-1 text-sm text-primary-content/75">Put it next to the private key you just signed, and <code>ssh</code> will use it automatically.</p>
+    </div>
+    <div class="flex gap-2">
+      <button type="button" class="btn rounded-2xl border-0 bg-white/20 text-primary-content hover:bg-white/30" @click="copy('cert', signed.cert)"><icon name="copy"></icon>{{ copied === 'cert' ? 'Copied' : 'Copy' }}</button>
+      <button type="button" class="btn rounded-2xl border-0 bg-white text-primary hover:bg-white/90" @click="download(signed.file, signed.cert)"><icon name="download"></icon>Download</button>
+    </div>
+  </div>
+  <pre class="mt-5 max-h-32 overflow-auto whitespace-pre-wrap break-all rounded-2xl bg-black/20 p-4 font-mono text-xs">{{ signed.cert }}</pre>
+</section>
+
+<div class="grid gap-4 lg:grid-cols-3">
+
+  <section class="rounded-box bg-base-100 p-6 sm:p-8">
+    <h2 class="text-2xl font-semibold tracking-tight">Certificates</h2>
+    <div class="mt-6 flex items-end gap-3">
+      <span class="text-6xl font-medium leading-none tracking-tight">{{ stats.active }}</span>
+      <span class="pb-1 text-sm leading-tight text-base-content/50">active<br>right now</span>
+    </div>
+    <div class="mt-6 flex h-2 gap-1">
+      <div v-if="stats.active" class="rounded-full bg-success" :style="{ flex: stats.active }"></div>
+      <div v-if="stats.expired" class="rounded-full bg-warning" :style="{ flex: stats.expired }"></div>
+      <div v-if="stats.revoked" class="rounded-full bg-error" :style="{ flex: stats.revoked }"></div>
+      <div v-if="!certs.length" class="flex-1 rounded-full bg-base-200"></div>
+    </div>
+    <div class="mt-6 grid grid-cols-3 divide-x divide-base-300 rounded-3xl bg-base-200 py-5 text-center">
+      <div><span class="mx-auto grid size-10 place-items-center rounded-full bg-success text-lg text-success-content"><icon name="check"></icon></span><div class="mt-3 text-2xl">{{ stats.active }}</div><div class="text-sm text-base-content/60">Active</div></div>
+      <div><span class="mx-auto grid size-10 place-items-center rounded-full bg-warning text-lg text-warning-content"><icon name="clock"></icon></span><div class="mt-3 text-2xl">{{ stats.expired }}</div><div class="text-sm text-base-content/60">Expired</div></div>
+      <div><span class="mx-auto grid size-10 place-items-center rounded-full bg-error text-lg text-error-content"><icon name="ban"></icon></span><div class="mt-3 text-2xl">{{ stats.revoked }}</div><div class="text-sm text-base-content/60">Revoked</div></div>
+    </div>
+  </section>
+
+  <section class="rounded-box bg-base-100 p-6 sm:p-8">
+    <h2 class="text-2xl font-semibold tracking-tight">Sign a key</h2>
+    <form @submit.prevent="sign" class="mt-6 space-y-4">
+      <label class="block"><span class="text-sm text-base-content/70">Device name</span>
+        <input v-model="signForm.identity" required maxlength="64" :placeholder="me.name + '-laptop-2026'" class="input mt-1 w-full border-0 bg-base-200"></label>
+      <label class="block"><span class="text-sm text-base-content/70">Public key, from <code>~/.ssh/id_ed25519.pub</code></span>
+        <textarea v-model="signForm.pubkey" rows="3" required placeholder="ssh-ed25519 AAAA…" class="textarea mt-1 w-full border-0 bg-base-200 font-mono text-xs"></textarea></label>
+      <fieldset>
+        <legend class="text-sm text-base-content/70">Valid for</legend>
+        <div class="mt-1 grid grid-cols-4 rounded-full bg-base-200 p-1 text-sm">
+          <label v-for="d in dayChoices" :key="d" class="cursor-pointer rounded-full py-2 text-center has-checked:bg-neutral has-checked:text-neutral-content">
+            <input type="radio" v-model="signForm.days" :value="d" class="sr-only">{{ d }} {{ d === 1 ? 'day' : 'days' }}</label>
+        </div>
+      </fieldset>
+      <button :disabled="busy" class="btn btn-neutral btn-lg w-full rounded-2xl">Sign certificate</button>
+    </form>
+  </section>
+
+  <section class="flex flex-col rounded-box bg-base-100 p-6 sm:p-8">
+    <div class="flex gap-2"><span class="badge badge-soft badge-success">User CA</span><span class="badge badge-soft badge-info">{{ me.ca.type }}</span></div>
+    <h2 class="mt-3 text-2xl font-semibold tracking-tight">Trust this CA on your servers</h2>
+    <p class="mt-2 text-sm text-base-content/60">Save this public key as <code>/etc/ssh/user_ca.pub</code> on each server and point <code>TrustedUserCAKeys</code> at it. The server will then accept every certificate signed here.</p>
+    <div class="mt-5 rounded-3xl bg-base-200 p-4">
+      <div class="text-xs text-base-content/50">Fingerprint</div>
+      <div class="mt-1 break-all font-mono text-xs">{{ me.ca.fingerprint }}</div>
+      <pre class="mt-3 line-clamp-2 whitespace-pre-wrap break-all font-mono text-xs text-base-content/60">{{ me.ca.key }}</pre>
+    </div>
+    <div class="mt-auto grid grid-cols-2 gap-2 pt-5">
+      <button type="button" class="btn btn-lg rounded-2xl border-base-300 bg-base-100" @click="copy('ca', me.ca.key)"><icon name="copy"></icon>{{ copied === 'ca' ? 'Copied' : 'Copy' }}</button>
+      <button type="button" class="btn btn-neutral btn-lg rounded-2xl" @click="download('user_ca.pub', me.ca.key)"><icon name="download"></icon>Download</button>
+    </div>
+  </section>
+</div>
+
+<section class="rounded-box bg-base-100 p-6 sm:p-8">
+  <div class="flex items-baseline justify-between">
+    <h2 class="text-2xl font-semibold tracking-tight">My devices</h2>
+    <span class="text-sm text-base-content/50">{{ certs.length }} issued</span>
+  </div>
+  <p v-if="!certs.length" class="mt-6 rounded-3xl bg-base-200 p-8 text-center text-sm text-base-content/60">No certificates yet. Sign your first key above.</p>
+  <div v-else class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <article v-for="c in certs" :key="c.serial" class="flex min-w-0 flex-col rounded-3xl p-5"
+             :class="[isNew(c) ? 'bg-primary text-primary-content' : 'bg-base-200', { 'opacity-60': c.revoked || c.expired }]">
+      <div class="flex items-center justify-between gap-2 text-xs" :class="isNew(c) ? 'text-primary-content/75' : 'text-base-content/50'">
+        <span>#{{ c.serial }} · {{ c.expired ? 'expired' : 'expires' }} {{ when(c.expires) }}</span>
+        <span v-if="isNew(c)" class="badge badge-sm border-0 bg-warning text-warning-content">New</span>
+      </div>
+      <h3 class="mt-2 break-all text-lg font-medium leading-snug">{{ c.identity }}</h3>
+      <div class="mt-3">
+        <span v-if="c.revoked" class="badge badge-soft badge-error">Revoked</span>
+        <span v-else-if="c.expired" class="badge badge-soft badge-warning">Expired</span>
+        <span v-else class="badge" :class="isNew(c) ? 'border-0 bg-white text-primary' : 'badge-soft badge-success'">Active</span>
+      </div>
+      <div class="mt-auto flex items-end justify-between gap-3 pt-6">
+        <span class="min-w-0 truncate font-mono text-xs" :class="isNew(c) ? 'text-primary-content/75' : 'text-base-content/50'" :title="c.pubkey">{{ c.fingerprint }}</span>
+        <button v-if="!c.revoked" @click="revoke(c)" :disabled="busy" class="btn btn-sm rounded-xl"
+                :class="isNew(c) ? 'border-0 bg-white/20 text-primary-content hover:bg-white/30' : 'btn-ghost text-error'">Revoke</button>
+      </div>
+    </article>
+  </div>
+</section>
+</template>
+
+<!-- Users -->
+<template v-if="view === 'users' && me.admin">
+
+<section v-if="enrolled" class="rounded-box bg-primary p-6 text-primary-content sm:p-8">
+  <span class="badge border-0 bg-white/20 text-primary-content">New user</span>
+  <h2 class="mt-3 text-2xl font-semibold tracking-tight">Send these to {{ enrolled.name }}</h2>
+  <p class="mt-1 text-sm text-primary-content/75">They are shown only once. Use a private channel, such as a password manager's sharing feature. In an authenticator app that asks for a key, such as Authy, paste the secret and choose 6-digit codes.</p>
+  <dl class="mt-5 grid gap-2">
+    <div v-for="f in enrolFields" :key="f.key" class="flex min-w-0 items-center gap-3 rounded-2xl bg-black/20 p-3">
+      <dt class="w-24 shrink-0 text-xs text-primary-content/75">{{ f.label }}</dt>
+      <dd class="min-w-0 flex-1 truncate font-mono text-sm" :title="enrolled[f.key]">{{ enrolled[f.key] }}</dd>
+      <button type="button" class="btn btn-sm rounded-xl border-0 bg-white/20 text-primary-content hover:bg-white/30" @click="copy(f.key, enrolled[f.key])"><icon name="copy"></icon>{{ copied === f.key ? 'Copied' : 'Copy' }}</button>
+    </div>
+  </dl>
+  <button type="button" class="btn mt-5 rounded-2xl border-0 bg-white text-primary hover:bg-white/90" @click="enrolled = null">I've sent them</button>
+</section>
+
+<div class="grid gap-4 lg:grid-cols-3">
+  <section class="rounded-box bg-base-100 p-6 sm:p-8">
+    <h2 class="text-2xl font-semibold tracking-tight">Add a user</h2>
+    <p class="mt-2 text-sm text-base-content/60">The site generates their password and authenticator secret, and shows them to you once.</p>
+    <form @submit.prevent="addUser" class="mt-6 space-y-4">
+      <label class="block"><span class="text-sm text-base-content/70">Username</span>
+        <input v-model="userForm.name" required maxlength="32" pattern="[a-z][a-z0-9._\-]*" autocomplete="off" placeholder="alex" class="input mt-1 w-full border-0 bg-base-200"></label>
+      <label class="block"><span class="text-sm text-base-content/70">Server usernames their certificates allow, separated by commas</span>
+        <input v-model="userForm.principals" required autocomplete="off" placeholder="alex,deploy" class="input mt-1 w-full border-0 bg-base-200 font-mono"></label>
+      <label class="flex cursor-pointer items-center justify-between gap-3 rounded-2xl bg-base-200 px-4 py-3">
+        <span><span class="block text-sm font-medium">Admin</span><span class="block text-xs text-base-content/60">Can add and remove users, including other admins.</span></span>
+        <input type="checkbox" v-model="userForm.admin" class="toggle toggle-primary"></label>
+      <button :disabled="busy" class="btn btn-neutral btn-lg w-full rounded-2xl">Add user</button>
+    </form>
+  </section>
+
+  <section class="rounded-box bg-base-100 p-6 sm:p-8 lg:col-span-2">
+    <div class="flex items-baseline justify-between">
+      <h2 class="text-2xl font-semibold tracking-tight">Users</h2>
+      <span class="text-sm text-base-content/50">{{ users.length }} {{ users.length === 1 ? 'account' : 'accounts' }}</span>
+    </div>
+    <ul class="mt-6 space-y-3">
+      <li v-for="u in users" :key="u.name" class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-3xl bg-base-200 p-4 sm:flex-nowrap">
+        <span class="hidden size-11 shrink-0 place-items-center rounded-full bg-primary/15 font-semibold uppercase text-primary sm:grid">{{ u.name[0] }}</span>
+        <div class="min-w-0 basis-full sm:basis-auto sm:flex-1">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="break-all font-medium">{{ u.name }}</span>
+            <span v-if="u.admin" class="badge badge-sm badge-soft badge-primary">Admin</span>
+            <span v-if="u.name === me.name" class="badge badge-sm badge-ghost">You</span>
+          </div>
+          <div class="mt-1 flex flex-wrap gap-1">
+            <span v-for="p in u.principals" :key="p" class="badge badge-sm whitespace-nowrap border-0 bg-base-100 font-mono">{{ p }}</span>
+          </div>
+        </div>
+        <div class="flex-1 text-sm text-base-content/60 sm:flex-none sm:text-right">{{ u.active }} active {{ u.active === 1 ? 'certificate' : 'certificates' }}</div>
+        <button v-if="u.name !== me.name" @click="removeUser(u)" :disabled="busy" class="btn btn-sm btn-ghost rounded-xl text-error">Remove</button>
+      </li>
+    </ul>
+  </section>
+</div>
+</template>
+
+<!-- About -->
+<article v-if="view === 'about'" class="rounded-box bg-base-100 p-6 sm:p-10">
+<div class="mx-auto max-w-2xl space-y-4 leading-relaxed text-base-content/80">
+  <h1 class="text-3xl font-semibold tracking-tight text-base-content">How this works</h1>
+
+  <p>This site is a certificate authority for SSH. Instead of copying each device's public key into <code>authorized_keys</code> on every server, every server trusts a single CA key. This site uses that key to sign your devices' public keys, and the signed result is a short-lived SSH certificate.</p>
+
+  <h2 class="pt-4 text-xl font-semibold text-base-content">Signing a key</h2>
+  <p>On a new device, create a key pair with <code>ssh-keygen -t ed25519</code> and paste the contents of the <code>.pub</code> file into the dashboard. The private key never leaves the device; only the public half is uploaded. The site signs it with the user CA for the usernames your account is allowed to log in as, and for between one and thirty days.</p>
+  <p>Save the certificate next to the private key, for example as <code>~/.ssh/id_ed25519-cert.pub</code>. <code>ssh</code> finds it there and presents it automatically, so <code>ssh root@server</code> works without any extra options. When the certificate expires, sign the same key again.</p>
+
+  <h2 class="pt-4 text-xl font-semibold text-base-content">Setting up a server</h2>
+  <p>Each server needs the CA's public key, saved as <code>/etc/ssh/user_ca.pub</code>, and a <code>TrustedUserCAKeys</code> line in its sshd configuration that points at it. The dashboard can copy or download that key for you. From then on the server accepts any unexpired certificate signed by this CA, provided the username you log in as is one the certificate allows. Adding a new device never requires touching the servers.</p>
+
+  <h2 class="pt-4 text-xl font-semibold text-base-content">Revoking a key</h2>
+  <p>Revoking bans the device's public key itself rather than a single certificate, so every certificate ever issued for that key stops working, and the site refuses to sign it again. A lost device therefore needs a new key, not just a new certificate.</p>
+  <p>The list of banned keys is published at <code>/revoked_keys</code>, the one address that doesn't require a login. Each server downloads it every five minutes, and sshd refuses any key on it through its <code>RevokedKeys</code> setting. A revocation therefore takes effect on every server within five minutes.</p>
+
+  <h2 class="pt-4 text-xl font-semibold text-base-content">Users</h2>
+  <p>Each account has a list of server usernames, and every certificate it signs allows exactly those. Admins can add accounts from the Users page; the site generates the new account's password and authenticator secret and shows them once. Removing an account ends its sessions and revokes every key it ever had signed, so its access to the servers ends within five minutes rather than when its certificates expire. If every admin is locked out, running <code>ssh-ca-web adduser</code> as root on the CA server creates or resets an admin.</p>
+
+  <h2 class="pt-4 text-xl font-semibold text-base-content">Security</h2>
+  <p>The app listens only on the server's loopback address and is reachable only through a Cloudflare Tunnel, with Cloudflare Access checking your identity before any request arrives. After that, logging in takes both a password and a code from your authenticator app, and each code works only once. Five failed logins from one address block it for fifteen minutes, and a session lasts twelve hours.</p>
+  <p>The CA's private key stays on the server in <code>/etc/ssh-ca</code>, readable only by root, and never leaves it. Every login, signature, revocation and change to an account is recorded in the server's system journal.</p>
+</div>
+</article>
+
+</div>
+</div>
+</body>
+</html>
