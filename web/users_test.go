@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
@@ -67,6 +68,7 @@ func TestUsers(t *testing.T) {
 		}
 	}
 
+	// createUser strips the spaces, so what is stored is the bare list.
 	var principals string
 	db.QueryRow(`SELECT principals FROM users WHERE name='cat'`).Scan(&principals)
 	if principals != "cat,deploy" {
@@ -76,5 +78,46 @@ func TestUsers(t *testing.T) {
 	db.QueryRow(`SELECT revoked FROM certs WHERE user='bob'`).Scan(&revoked)
 	if !revoked {
 		t.Error("removed user's key was not revoked")
+	}
+
+	// --- editing an account ---
+
+	// cat was created by the table above: principals "cat,deploy", not an admin.
+	db.Exec(`INSERT INTO sessions VALUES(?,?,?)`, hashToken("cat-tok"), "cat", exp)
+	var pwBefore, secBefore []byte
+	db.QueryRow(`SELECT pw_hash,totp_secret FROM users WHERE name='cat'`).Scan(&pwBefore, &secBefore)
+
+	edit := adminOnly(editUser)
+	for _, c := range []struct {
+		name      string
+		got, want int
+	}{
+		{"non-admin can't edit", call(edit, "PUT", "/", `{"principals":"cat"}`, "cat-tok", "name", "ann"), 403},
+		{"no session can't edit", call(edit, "PUT", "/", `{"principals":"cat"}`, "nope", "name", "cat"), 401},
+		{"bad principal", call(edit, "PUT", "/", `{"principals":"cat;rm"}`, "ann-tok", "name", "cat"), 400},
+		{"can't drop own admin", call(edit, "PUT", "/", `{"principals":"root,ann","admin":false}`, "ann-tok", "name", "ann"), 400},
+		{"edit missing user", call(edit, "PUT", "/", `{"principals":"cat"}`, "ann-tok", "name", "nobody"), 404},
+		{"edit", call(edit, "PUT", "/", `{"principals":"cat, web","admin":true}`, "ann-tok", "name", "cat"), 204},
+		{"edited user keeps their session", call(list, "GET", "/", "", "cat-tok"), 200},
+		{"saving the same thing again", call(edit, "PUT", "/", `{"principals":"cat,web","admin":true}`, "ann-tok", "name", "cat"), 204},
+	} {
+		if c.got != c.want {
+			t.Errorf("%s: got %d, want %d", c.name, c.got, c.want)
+		}
+	}
+
+	db.QueryRow(`SELECT principals FROM users WHERE name='cat'`).Scan(&principals)
+	if principals != "cat,web" {
+		t.Errorf("edited principals stored as %q", principals)
+	}
+	var pwAfter, secAfter []byte
+	db.QueryRow(`SELECT pw_hash,totp_secret FROM users WHERE name='cat'`).Scan(&pwAfter, &secAfter)
+	if !bytes.Equal(pwBefore, pwAfter) || !bytes.Equal(secBefore, secAfter) {
+		t.Error("editing an account changed its password or authenticator secret")
+	}
+	var admin bool
+	db.QueryRow(`SELECT admin FROM users WHERE name='ann'`).Scan(&admin)
+	if !admin {
+		t.Error("an admin dropped their own access")
 	}
 }

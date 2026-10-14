@@ -50,6 +50,7 @@ func main() {
 	http.HandleFunc("POST /api/certs/{serial}/revoke", authed(revoke))
 	http.HandleFunc("GET /api/users", adminOnly(listUsers))
 	http.HandleFunc("POST /api/users", adminOnly(createUser))
+	http.HandleFunc("PUT /api/users/{name}", adminOnly(editUser))
 	http.HandleFunc("DELETE /api/users/{name}", adminOnly(deleteUser))
 	http.HandleFunc("GET /revoked_keys", revokedKeys) // public: servers cron-fetch this
 	srv := &http.Server{

@@ -33,9 +33,11 @@ const app = createApp({
     const signed = ref(null)
     const enrolled = ref(null)
     const copied = ref('')
+    const editing = ref('')
     const loginForm = reactive({ user: '', password: '', code: '' })
     const signForm = reactive({ identity: '', pubkey: '', days: 7 })
     const userForm = reactive({ name: '', principals: '', admin: false })
+    const editForm = reactive({ name: '', principals: '', admin: false })
 
     const route = () => location.hash.slice(1) || 'dashboard'
     const view = ref(route())
@@ -124,6 +126,20 @@ const app = createApp({
       scrollTo({ top: 0, behavior: 'smooth' })
     })
 
+    // startEdit fills the form from the row, so the list keeps whatever order it has.
+    const startEdit = u => {
+      Object.assign(editForm, { name: u.name, principals: u.principals.join(','), admin: u.admin })
+      editing.value = u.name
+    }
+
+    // The row stays open when the save fails, so the message in the banner is
+    // next to something that can be corrected.
+    const saveUser = () => run(async () => {
+      await api('PUT', `/api/users/${encodeURIComponent(editForm.name)}`, { principals: editForm.principals, admin: editForm.admin })
+      editing.value = ''
+      users.value = await api('GET', '/api/users')
+    })
+
     const removeUser = u => {
       if (!confirm(`Remove ${u.name}? Their sessions end now, and every key they ever had signed is revoked.`)) return
       run(async () => {
@@ -152,7 +168,7 @@ const app = createApp({
     load()
     return {
       ready, me, error, busy, certs, users, signed, enrolled, copied, view, tabs, dayChoices, stats, enrolFields,
-      loginForm, signForm, userForm, login, logout, sign, revoke, addUser, removeUser, copy, download, isNew, when,
+      loginForm, signForm, userForm, editing, editForm, login, logout, sign, revoke, addUser, startEdit, saveUser, removeUser, copy, download, isNew, when,
     }
   },
 })

@@ -118,6 +118,8 @@ The second argument lists the usernames your certificates will allow you to log 
 
 Accounts created with `adduser` are admins. Admins see a **Users** page where they can add and remove accounts without touching the box. When you add someone, the site generates their password and authenticator secret and shows them to you once, so send them over a private channel. Removing an account ends its sessions and revokes every key it ever had signed. If every admin is locked out, running `adduser` on the box again creates or resets an admin.
 
+**Edit** on the same page changes an account's server usernames, and whether it is an admin, without touching its password, its authenticator secret or its sessions, so nobody has to re-enrol a phone for that. The usernames a certificate allows are written into the certificate when it is signed, so a username taken away here disappears from the next certificate rather than from the one the person is already carrying; revoke their key if the old certificate has to stop working now. An admin cannot drop their own admin access, in the same way they cannot remove themselves.
+
 ### Tunnel
 
 Copy the tunnel script to the box and run it there. It will print a URL the first time; open it in your browser and choose your domain.

@@ -29,6 +29,12 @@ func validUser(name, principals string) error {
 	if !userRe.MatchString(name) {
 		return errors.New("Usernames are 1 to 32 lowercase letters, digits, dots, dashes or underscores, starting with a letter")
 	}
+	return validPrincipals(principals)
+}
+
+// validPrincipals checks the list of Linux usernames a certificate will allow, which
+// createUser, editUser and adduser all pass in the same comma-separated form.
+func validPrincipals(principals string) error {
 	ps := strings.Split(principals, ",")
 	if len(ps) > 16 {
 		return errors.New("At most 16 server usernames")
@@ -143,6 +149,47 @@ func createUser(w http.ResponseWriter, r *http.Request, a account) {
 	writeJSON(w, http.StatusCreated, map[string]string{
 		"name": in.Name, "password": pw, "secret": key.Secret(), "url": key.URL(),
 	})
+}
+
+// editUser changes an account's server usernames and whether it is an admin, leaving
+// the password, the authenticator secret and any open sessions alone. The certificates
+// someone already holds are untouched too: the usernames they allow were written into
+// the certificate when it was signed, so a username taken away here stops appearing in
+// the next one, and revoking is still the way to end the old ones early.
+func editUser(w http.ResponseWriter, r *http.Request, a account) {
+	name := r.PathValue("name")
+	var in struct {
+		Principals string
+		Admin      bool
+	}
+	if !readJSON(r, &in) {
+		jsonError(w, http.StatusBadRequest, "Bad request")
+		return
+	}
+	in.Principals = strings.ReplaceAll(in.Principals, " ", "")
+	if err := validPrincipals(in.Principals); err != nil {
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	// Same idea as not being able to remove yourself: an admin who drops their own
+	// admin flag loses the Users page. adduser on the box is still the way back in.
+	if name == a.Name && !in.Admin {
+		jsonError(w, http.StatusBadRequest, "You can't drop your own admin access")
+		return
+	}
+	// SQLite counts every row the WHERE clause matched, so saving without changing
+	// anything still reports a row and does not look like a missing user.
+	res, err := db.Exec(`UPDATE users SET principals=?,admin=? WHERE name=?`, in.Principals, in.Admin, name)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, "DB error")
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		jsonError(w, http.StatusNotFound, "No such user")
+		return
+	}
+	log.Printf("user edited name=%q admin=%t principals=%q by=%q", name, in.Admin, in.Principals, a.Name)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // deleteUser also revokes every key the user ever had signed. Otherwise their
