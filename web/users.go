@@ -68,7 +68,7 @@ func enrol(query, name, principals string, admin bool, pw []byte) (*otp.Key, err
 // copy of the database, needing access to the bucket, so it is also the way back in if every admin is locked out.
 func addUser(name, principals string) {
 	if name == "" || principals == "" {
-		log.Fatal("usage: shaka adduser NAME root,hope")
+		log.Fatal("usage: shaka adduser NAME root,NAME")
 	}
 	check(validUser(name, principals))
 	fmt.Fprint(os.Stderr, "password (12+ chars): ")

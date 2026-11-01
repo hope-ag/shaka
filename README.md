@@ -12,6 +12,7 @@ Clients (personal devices) are issued signed, short-lived certs by Shaka so serv
 > The CA private key is the single authority in this system. Passphrase it and back it up offline.
 
 ## Screenshots
+
 **Dashboard**
 ![Dashboard](./docs/assets/dashboard.png)
 **Users**
@@ -58,7 +59,7 @@ ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519
 Sign `id_ed25519.pub` with the CA key, or use the web UI (section 6):
 
 ```bash
-ssh-keygen -s ~/ssh-ca/user_ca -I "hope-laptop-2026" -n root,hope -V +7d id_ed25519.pub
+ssh-keygen -s ~/ssh-ca/user_ca -I "alex-laptop-2026" -n root,alex -V +7d id_ed25519.pub
 ```
 
 - `-I` identity (shows in server logs), `-n` allowed usernames, `-V` validity.
@@ -113,10 +114,10 @@ At the end, the script prints the DNS records to add for your domain. If your DN
 After the first deploy, create your login:
 
 ```bash
-./web/admin.sh hope root,hope
+./web/admin.sh alex root,alex
 ```
 
-The second argument lists the usernames your certificates will allow you to log in as. The script pauses the service, restores the database into a temporary folder on your machine, and asks for a password. It then prints an `otpauth://` link, uploads the change and turns the service back on. Litestream reads your Application Default Credentials, so run `gcloud auth application-default login` first if you never have. If your authenticator app asks you to enter a key manually, as Authy does, paste only the 32 characters after `secret=` and choose 6-digit codes. Every run of `admin.sh` replaces that account's secret, so delete the old entry from the app whenever you run it again.
+The first argument is the username you will sign in to the site with. The second lists the server usernames your certificates will allow you to log in as, so with `root,alex` you can run `ssh alex@server` or `ssh root@server`. The script pauses the service, restores the database into a temporary folder on your machine, and asks for a password. It then prints an `otpauth://` link, uploads the change and turns the service back on. Litestream reads your Application Default Credentials, so run `gcloud auth application-default login` first if you never have. If your authenticator app asks you to enter a key manually, as Authy does, paste only the 32 characters after `secret=` and choose 6-digit codes. Every run of `admin.sh` replaces that account's secret, so delete the old entry from the app whenever you run it again.
 
 Accounts created with `admin.sh` are admins. Admins see a **Users** page where they can add and remove accounts without running anything locally. When you add someone, the site generates their password and authenticator secret and shows them to you once, so send them over a private channel. Removing an account ends its sessions and revokes every key it ever had signed. If every admin is locked out, running `admin.sh` again creates or resets an admin.
 
