@@ -1,13 +1,28 @@
-# shaka
+# Shaka (ssh-ca)
 
-OpenSSH certificate authority, with a web UI that runs on Google Cloud Run. Clients (personal devices) get short-lived certs so servers trust the CA instead of individual keys.
+> He is the king, everything goes through him.
 
-- New device: generate key, get it signed. No key copying between devices.
-- Lost device: cert expires (7d) or can be revoked early from the web portal.
+[Rocky Linux SSH certificate Docs](https://docs.rockylinux.org/10/guides/security/ssh_ca_key_signing/)
+OpenSSH certificate authority in a single Go binary, with a web UI that runs on Google Cloud Run.
+Clients (personal devices) are issued signed, short-lived certs by Shaka so servers trust Shaka instead of individual keys.
 
-> The CA private key = root on every server. Passphrase it and back it up offline.
+- New device: generate a key and get it signed. No need to copy keys between devices.
+- Lost device: the cert expires or can be revoked early from the web portal.
 
-## 1. Create the CA (on your own machine)
+> The CA private key is the single authority in this system. Passphrase it and back it up offline.
+
+## Screenshots
+**Dashboard**
+![Dashboard](./docs/assets/dashboard.png)
+**Users**
+This is not a true multi-tenant app. The same private key is used to sign all client certs, but keys are scoped to the signed in user.
+![Users](./docs/assets/users.png)
+**Login**
+![Login](./docs/assets/login.png)
+
+## Getting Started
+
+### 1. Create the CA (on your own machine)
 
 ```bash
 mkdir -p ~/ssh-ca && chmod 700 ~/ssh-ca
@@ -17,7 +32,7 @@ ssh-keygen -t ed25519 -f ~/ssh-ca/user_ca -C "user-ca"   # strong passphrase
 - Back up the private key offline, in a password manager or on an encrypted USB drive. Losing it means re-trusting every server.
 - The web UI (section 6) keeps its own copy of `user_ca` in Secret Manager.
 
-## 2. Trust the CA on each Hetzner server (once)
+### 2. Trust the CA on each Hetzner server (once)
 
 ```bash
 # copy ~/ssh-ca/user_ca.pub to the server, then:
@@ -32,7 +47,7 @@ If you use the web UI (section 6), the **Trust this CA on your servers** card ca
 
 Keep existing `authorized_keys` until cert login is tested. Loop over servers with a script/Ansible.
 
-## 3. Onboard a device
+### 3. Onboard a device
 
 On the device:
 
@@ -50,12 +65,12 @@ ssh-keygen -s ~/ssh-ca/user_ca -I "hope-laptop-2026" -n root,hope -V +7d id_ed25
 
 Copy `id_ed25519-cert.pub` back to the device's `~/.ssh/`. `ssh root@server` just works. Inspect with `ssh-keygen -L -f ~/.ssh/id_ed25519-cert.pub`.
 
-## 4. Lost device
+### 4. Lost device
 
 - Wait for the cert to expire, or revoke now: append its **public key** to `/etc/ssh/revoked_keys` on every server.
 - If you use the web UI (section 6), click **Revoke key** next to the device. Every server picks up the change within five minutes.
 
-## 5. Break-glass
+### 5. Break-glass
 
 If the web UI is down you can still sign by hand with the offline key (section 3). Keep:
 
@@ -63,11 +78,11 @@ If the web UI is down you can still sign by hand with the offline key (section 3
 - The offline CA key backup.
 - Hetzner rescue console as last resort.
 
-## Later: automate signing
+### Later: automate signing
 
 Manual re-signing every 7 days gets old. The web UI (section 6) covers this. [Smallstep step-ca](https://smallstep.com/docs/step-ca/) + Google OIDC → `step ssh login you@gmail.com` issues a ~16h cert. Same `TrustedUserCAKeys` on servers.
 
-## 6. Web UI (`web/`)
+### 6. Web UI (`web/`)
 
 The web UI lets you sign keys, revoke them and manage users from a browser instead of the command line. You log in with a password and a code from an authenticator app. It is a single Go binary that keeps everything in SQLite.
 
@@ -75,7 +90,7 @@ It runs on Cloud Run, which scales to zero, so you pay for the moments someone i
 
 Litestream uploads changes about a second after they happen, and it uploads anything still pending when Cloud Run stops the instance. A change could only be lost if the instance crashed in that second. Object versioning is turned on for the bucket, so older copies of the database can be recovered from it.
 
-### Deploy
+#### Deploy
 
 You need `gcloud` logged in with the project you want selected (`gcloud config set project ...`), and Go. Run the deploy script from your own machine, passing the domain the site will live on. The first time, set `CA_KEY` to the CA private key from section 1:
 
@@ -87,13 +102,13 @@ The script runs the tests, then creates whatever is missing: a service account t
 
 The service runs in `europe-west1` unless you set `REGION`. Custom domains only work in `asia-east1`, `asia-northeast1`, `asia-southeast1`, `europe-north1`, `europe-west1`, `europe-west4`, `us-central1`, `us-east1`, `us-east4` and `us-west1`. You can also override `SERVICE` (default `ssh-ca`) and `BUCKET` (default `PROJECT-ssh-ca`), as long as you pass the same values to `admin.sh`.
 
-### Custom domain
+#### Custom domain
 
 Google has to know you own the domain before it will map it. If you haven't verified it before, run `gcloud domains verify example.com` once and follow the Search Console steps, then rerun the deploy script.
 
 At the end, the script prints the DNS records to add for your domain. If your DNS is on Cloudflare, set the records to **DNS only** (grey cloud), not proxied, and turn off **Always Use HTTPS** under **SSL/TLS** > **Edge Certificates**. Google issues the HTTPS certificate itself and needs to reach the service directly to do so, which usually takes about 15 minutes and at most a day. Leaving the records unproxied also matters for the login throttle: the app takes each visitor's address from the last entry in `X-Forwarded-For`, which Google's front end adds, and behind Cloudflare that entry would be Cloudflare's address instead of the visitor's. Custom domain mapping is still a preview feature of Cloud Run.
 
-### Create your login
+#### Create your login
 
 After the first deploy, create your login:
 
@@ -107,7 +122,7 @@ Accounts created with `admin.sh` are admins. Admins see a **Users** page where t
 
 **Edit** on the same page changes an account's server usernames, and whether it is an admin, without touching its password, its authenticator secret or its sessions, so nobody has to re-enrol a phone for that. The usernames a certificate allows are written into the certificate when it is signed, so a username taken away here will disappear from the next certificate rather than from the one the person is already carrying; revoke their key if the old certificate has to stop working now. An admin cannot drop their own admin access, in the same way they cannot remove themselves.
 
-### Sharing the ban list with your servers
+#### Sharing the ban list with your servers
 
 Each Hetzner server needs to download the list of banned keys. Add this line to root's crontab on every server to fetch it every five minutes:
 
