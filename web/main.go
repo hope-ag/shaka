@@ -1,5 +1,5 @@
 // ssh-ca-web: tiny web UI to sign device keys, revoke them and manage users.
-// Login = password + TOTP. Listens on localhost; put Caddy/nginx (TLS) in front.
+// Login = password + TOTP. Runs on Cloud Run behind Litestream (see Dockerfile).
 // The page is a static Vue app that talks to the JSON API under /api.
 //
 // The package is split by area: auth.go is logging in and sessions, users.go is

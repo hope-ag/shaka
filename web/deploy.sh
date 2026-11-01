@@ -1,79 +1,69 @@
 #!/usr/bin/env bash
-# Build locally, install binary + systemd unit on the CA box, (re)start it.
-# Usage: ./deploy.sh INSTANCE [extra gcloud flags, e.g. --zone=europe-west1-b --tunnel-through-iap]
-# Uses gcloud compute ssh/scp, so OS Login / IAM access applies. GOARCH=arm64 for ARM VMs.
-# Asks once for the CA key passphrase if the key is encrypted and the box has none stored.
+# Build and deploy the web UI to Cloud Run, creating what it needs on the first run.
+# Usage: CA_KEY=path/to/user_ca ./deploy.sh ca.example.com
+# CA_KEY is only read on the first run, to store the key in Secret Manager.
+# REGION must be one that supports domain mappings (see README); SERVICE and BUCKET can be overridden.
 set -euo pipefail
-INSTANCE=${1:?usage: deploy.sh INSTANCE [gcloud flags]}
-shift
+DOMAIN=${1:?usage: CA_KEY=path/to/user_ca deploy.sh DOMAIN}
+PROJECT=$(gcloud config get-value project 2>/dev/null)
+REGION=${REGION:-europe-west1}
+SERVICE=${SERVICE:-ssh-ca}
+BUCKET=${BUCKET:-$PROJECT-ssh-ca}
+SA=ssh-ca-run@$PROJECT.iam.gserviceaccount.com
 cd "$(dirname "$0")"
 
 go test ./...
-CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH:-amd64} go build -trimpath -ldflags="-s -w" -o ssh-ca-web .
-gcloud compute scp "$@" ssh-ca-web "$INSTANCE":/tmp/ssh-ca-web
-rm ssh-ca-web
 
-# The service has no terminal to prompt on, so an encrypted CA key needs its passphrase
-# in a root-only file. Skip the prompt when the key has no passphrase or the file exists.
-PASS_B64=""
-if ! gcloud compute ssh "$INSTANCE" "$@" --command \
-  'sudo test -f /etc/ssh-ca/passphrase || sudo ssh-keygen -y -P "" -f /etc/ssh-ca/user_ca >/dev/null 2>&1' >/dev/null 2>&1; then
-  [ -t 0 ] || { echo "The CA key is encrypted, so the script needs a terminal to ask for its passphrase. Run it yourself." >&2; exit 1; }
-  printf 'CA key passphrase: ' >&2
-  read -rs CA_PASS
-  printf '\n' >&2
-  PASS_B64=$(printf %s "$CA_PASS" | base64 | tr -d '\n')
+gcloud services enable run.googleapis.com secretmanager.googleapis.com \
+  artifactregistry.googleapis.com cloudbuild.googleapis.com
+
+# A dedicated identity, so the service can read its two secrets and its bucket and nothing else.
+gcloud iam service-accounts describe "$SA" >/dev/null 2>&1 ||
+  gcloud iam service-accounts create ssh-ca-run --display-name "ssh-ca Cloud Run"
+
+if ! gcloud storage buckets describe "gs://$BUCKET" >/dev/null 2>&1; then
+  gcloud storage buckets create "gs://$BUCKET" --location="$REGION" \
+    --uniform-bucket-level-access --public-access-prevention
+  gcloud storage buckets update "gs://$BUCKET" --versioning
+fi
+gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" \
+  --member="serviceAccount:$SA" --role=roles/storage.objectUser >/dev/null
+
+if ! gcloud secrets describe ssh-ca-key >/dev/null 2>&1; then
+  : "${CA_KEY:?first run: set CA_KEY to the CA private key file (user_ca)}"
+  gcloud secrets create ssh-ca-key --data-file="$CA_KEY" --replication-policy=automatic
+  # The service has no terminal to prompt on, so an encrypted key needs its passphrase stored too.
+  if ! ssh-keygen -y -P "" -f "$CA_KEY" >/dev/null 2>&1; then
+    printf 'CA key passphrase: ' >&2
+    read -rs CA_PASS
+    printf '\n' >&2
+    printf %s "$CA_PASS" | gcloud secrets create ssh-ca-pass --data-file=- --replication-policy=automatic
+  fi
+fi
+grant() {
+  gcloud secrets add-iam-policy-binding "$1" \
+    --member="serviceAccount:$SA" --role=roles/secretmanager.secretAccessor >/dev/null
+}
+grant ssh-ca-key
+SECRETS=/secrets/key/user_ca=ssh-ca-key:latest
+ENV=LITESTREAM_BUCKET=$BUCKET
+if gcloud secrets describe ssh-ca-pass >/dev/null 2>&1; then
+  grant ssh-ca-pass
+  SECRETS+=,/secrets/pass/passphrase=ssh-ca-pass:latest
+  ENV+=,CA_PASSPHRASE_FILE=/secrets/pass/passphrase
 fi
 
-{ printf 'PASS_B64=%s\n' "$PASS_B64"; cat <<'EOF'
-set -euo pipefail
-install -m 755 /tmp/ssh-ca-web /usr/local/bin/ssh-ca-web && rm /tmp/ssh-ca-web
-install -d -m 700 /var/lib/ssh-ca-web
+# One instance at most: SQLite has a single writer, and the login throttle lives in memory.
+gcloud run deploy "$SERVICE" --source . --region "$REGION" \
+  --service-account "$SA" --allow-unauthenticated \
+  --min-instances 0 --max-instances 1 --memory 256Mi --cpu 1 \
+  --execution-environment gen2 \
+  --set-secrets "$SECRETS" --set-env-vars "$ENV"
 
-if [ -n "$PASS_B64" ]; then
-  install -d -m 700 /etc/ssh-ca
-  (umask 077; printf %s "$PASS_B64" | base64 -d > /etc/ssh-ca/passphrase)
+if ! gcloud beta run domain-mappings describe --domain "$DOMAIN" --region "$REGION" >/dev/null 2>&1; then
+  gcloud beta run domain-mappings create --service "$SERVICE" --domain "$DOMAIN" --region "$REGION"
 fi
-CRED=""
-[ -f /etc/ssh-ca/passphrase ] && CRED=$'LoadCredential=ca_pass:/etc/ssh-ca/passphrase\nEnvironment=CA_PASSPHRASE_FILE=%d/ca_pass'
-
-cat > /etc/systemd/system/ssh-ca-web.service <<UNIT
-[Unit]
-Description=SSH CA web UI
-After=network.target
-
-[Service]
-ExecStart=/usr/local/bin/ssh-ca-web
-$CRED
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-PrivateTmp=yes
-PrivateDevices=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
-RestrictNamespaces=yes
-LockPersonality=yes
-MemoryDenyWriteExecute=yes
-SystemCallArchitectures=native
-CapabilityBoundingSet=
-ReadWritePaths=/var/lib/ssh-ca-web
-ReadOnlyPaths=/etc/ssh-ca
-MemoryMax=128M
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-
-systemctl daemon-reload
-systemctl enable ssh-ca-web >/dev/null
-systemctl restart ssh-ca-web
-sleep 1
-systemctl is-active ssh-ca-web && curl -fsS -o /dev/null -w "local check: %{http_code}\n" http://127.0.0.1:8080/ \
-  || { journalctl -u ssh-ca-web -n 20 --no-pager; exit 1; }
-echo "First deploy? Create a user: sudo ssh-ca-web adduser NAME root,NAME"
-EOF
-} | gcloud compute ssh "$INSTANCE" "$@" --command 'sudo bash -s'
+echo "Add these DNS records for $DOMAIN (DNS only, not proxied, if it is on Cloudflare):"
+gcloud beta run domain-mappings describe --domain "$DOMAIN" --region "$REGION" \
+  --format='yaml(status.resourceRecords)'
+echo "First deploy? Create your login: ./admin.sh NAME root,NAME"

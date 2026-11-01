@@ -64,8 +64,8 @@ func enrol(query, name, principals string, admin bool, pw []byte) (*otp.Key, err
 	return key, err
 }
 
-// addUser creates or resets an admin from the command line. Anyone who can run it is
-// root on the CA box already, so it is also the way back in if every admin is locked out.
+// addUser creates or resets an admin from the command line. admin.sh runs it on a
+// copy of the database, needing access to the bucket, so it is also the way back in if every admin is locked out.
 func addUser(name, principals string) {
 	if name == "" || principals == "" {
 		log.Fatal("usage: ssh-ca-web adduser NAME root,hope")
@@ -172,7 +172,7 @@ func editUser(w http.ResponseWriter, r *http.Request, a account) {
 		return
 	}
 	// Same idea as not being able to remove yourself: an admin who drops their own
-	// admin flag loses the Users page. adduser on the box is still the way back in.
+	// admin flag loses the Users page. admin.sh is still the way back in.
 	if name == a.Name && !in.Admin {
 		jsonError(w, http.StatusBadRequest, "You can't drop your own admin access")
 		return

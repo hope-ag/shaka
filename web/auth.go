@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,9 +27,13 @@ var (
 )
 
 func clientIP(r *http.Request) string {
-	// Only reachable via Cloudflare (tunnel or CF-only firewall), so its header is trustworthy.
-	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
-		return ip
+	// Cloud Run's front end appends the address it saw to X-Forwarded-For, so only the last
+	// entry is trustworthy; anything before it came from the client and could be made up.
+	if v := r.Header.Values("X-Forwarded-For"); len(v) > 0 {
+		last := v[len(v)-1]
+		if ip := strings.TrimSpace(last[strings.LastIndex(last, ",")+1:]); ip != "" {
+			return ip
+		}
 	}
 	host, _, _ := net.SplitHostPort(r.RemoteAddr)
 	return host

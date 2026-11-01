@@ -1,0 +1,7 @@
+# Cloud Run sends SIGTERM and kills the container 10 seconds later, so the final
+# upload of pending writes has to finish inside that window.
+shutdown-sync-timeout: 8s
+dbs:
+  - path: /data/ca.db
+    replica:
+      url: gs://${LITESTREAM_BUCKET}/ca.db
