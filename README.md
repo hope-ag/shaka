@@ -105,7 +105,7 @@ The second argument lists the usernames your certificates will allow you to log 
 
 Accounts created with `admin.sh` are admins. Admins see a **Users** page where they can add and remove accounts without running anything locally. When you add someone, the site generates their password and authenticator secret and shows them to you once, so send them over a private channel. Removing an account ends its sessions and revokes every key it ever had signed. If every admin is locked out, running `admin.sh` again creates or resets an admin.
 
-**Edit** on the same page changes an account's server usernames, and whether it is an admin, without touching its password, its authenticator secret or its sessions, so nobody has to re-enrol a phone for that. The usernames a certificate allows are written into the certificate when it is signed, so a username taken away here disappears from the next certificate rather than from the one the person is already carrying; revoke their key if the old certificate has to stop working now. An admin cannot drop their own admin access, in the same way they cannot remove themselves.
+**Edit** on the same page changes an account's server usernames, and whether it is an admin, without touching its password, its authenticator secret or its sessions, so nobody has to re-enrol a phone for that. The usernames a certificate allows are written into the certificate when it is signed, so a username taken away here will disappear from the next certificate rather than from the one the person is already carrying; revoke their key if the old certificate has to stop working now. An admin cannot drop their own admin access, in the same way they cannot remove themselves.
 
 ### Sharing the ban list with your servers
 
@@ -117,4 +117,4 @@ Each Hetzner server needs to download the list of banned keys. Add this line to 
 
 Fedora doesn't ship cron, so install it there first with `dnf install -y cronie && systemctl enable --now crond`. A download that fails leaves the previous list in place, and sshd reads the file on every login, so nothing needs restarting.
 
-When you click **Revoke key**, the app bans the public key itself rather than a single certificate. Every certificate ever issued for that key stops working, and the app will refuse to sign that key again.
+When you click **Revoke key**, the app bans the public key itself rather than a single certificate. Every certificate ever issued for that key will stop working, and the app will refuse to sign that key again.
