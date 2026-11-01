@@ -1,4 +1,4 @@
-// ssh-ca-web: tiny web UI to sign device keys, revoke them and manage users.
+// shaka: tiny web UI to sign device keys, revoke them and manage users.
 // Login = password + TOTP. Runs on Cloud Run behind Litestream (see Dockerfile).
 // The page is a static Vue app that talks to the JSON API under /api.
 //
@@ -27,8 +27,8 @@ CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user TEXT NOT 
 CREATE TABLE IF NOT EXISTS certs (serial INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT NOT NULL, identity TEXT NOT NULL, pubkey TEXT NOT NULL, expires INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0);`
 
 func main() {
-	dbPath := flag.String("db", "/var/lib/ssh-ca-web/ca.db", "sqlite path")
-	caKey := flag.String("ca", "/etc/ssh-ca/user_ca", "CA private key")
+	dbPath := flag.String("db", "/data/ca.db", "sqlite path")
+	caKey := flag.String("ca", "/secrets/key/user_ca", "CA private key")
 	addr := flag.String("addr", "127.0.0.1:8080", "listen address")
 	flag.Parse()
 

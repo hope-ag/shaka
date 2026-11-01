@@ -7,6 +7,8 @@ set -euo pipefail
 DOMAIN=${1:?usage: CA_KEY=path/to/user_ca deploy.sh DOMAIN}
 PROJECT=$(gcloud config get-value project 2>/dev/null)
 REGION=${REGION:-europe-west1}
+# The Google Cloud resources keep their names from before the rename to shaka,
+# because none of them can be renamed in place.
 SERVICE=${SERVICE:-ssh-ca}
 BUCKET=${BUCKET:-$PROJECT-ssh-ca}
 SA=ssh-ca-run@$PROJECT.iam.gserviceaccount.com

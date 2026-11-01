@@ -1,4 +1,4 @@
-module ssh-ca-web
+module shaka
 
 go 1.27.0
 

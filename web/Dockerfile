@@ -5,11 +5,11 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go test ./... && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /ssh-ca-web . && mkdir /data
+RUN go test ./... && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /shaka . && mkdir /data
 
 FROM litestream/litestream:0.5.17-scratch
-COPY --from=build /ssh-ca-web /usr/local/bin/ssh-ca-web
+COPY --from=build /shaka /usr/local/bin/shaka
 COPY --from=build --chown=65532:65532 /data /data
 COPY litestream.yml /etc/litestream.yml
 USER 65532
-ENTRYPOINT ["/usr/local/bin/litestream", "replicate", "-restore-if-db-not-exists", "-exec", "/usr/local/bin/ssh-ca-web -db /data/ca.db -ca /secrets/key/user_ca -addr :8080"]
+ENTRYPOINT ["/usr/local/bin/litestream", "replicate", "-restore-if-db-not-exists", "-exec", "/usr/local/bin/shaka -db /data/ca.db -ca /secrets/key/user_ca -addr :8080"]

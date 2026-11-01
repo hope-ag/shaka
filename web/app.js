@@ -179,6 +179,6 @@ app.component('icon', {
   template: `<svg class="size-[1em]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" v-html="icons[name]"></svg>`,
 })
 app.component('logo', {
-  template: `<span class="grid size-9 place-items-center rounded-xl bg-neutral text-lg text-neutral-content"><icon name="key"></icon></span><span class="whitespace-nowrap text-xl font-bold tracking-tight max-[380px]:hidden">ssh-ca</span>`,
+  template: `<svg class="size-9 shrink-0" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none"><rect width="128" height="128" rx="32" fill="#0A0A0D"/><path d="M28 43C26.6667 41.6667 26.3333 42.6667 27 46L35 87C35.3333 89.6667 37 91 40 91H88C91 91 92.6667 89.6667 93 87L101 46C101.667 42.6667 101 41.6667 99 43L81 56L66 36C64.6667 34 63.3333 34 62 36L47 56L28 43ZM64 60C59.58 60 56 63.58 56 68C56 71.05 57.71 73.7 60.22 75.05L58 85H70L67.78 75.05C70.29 73.7 72 71.05 72 68C72 63.58 68.42 60 64 60Z" fill-rule="evenodd" clip-rule="evenodd" fill="white"/></svg><span class="whitespace-nowrap text-xl font-bold tracking-tight max-[380px]:hidden">shaka</span>`,
 })
 app.mount('#app')

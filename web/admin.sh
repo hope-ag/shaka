@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Create or reset an admin, which replaces running `ssh-ca-web adduser` on a box.
+# Create or reset an admin, which runs `shaka adduser` against the database in the bucket.
 # Usage: ./admin.sh NAME root,NAME   (same REGION/SERVICE/BUCKET overrides as deploy.sh)
 # Pauses the service so nothing else writes, restores the database from the bucket into a
 # temporary folder here, runs adduser on it, uploads the change and turns the service back on.

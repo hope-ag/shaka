@@ -56,7 +56,7 @@ func enrol(query, name, principals string, admin bool, pw []byte) (*otp.Key, err
 	}
 	secret := make([]byte, 20)
 	rand.Read(secret)
-	key, err := totp.Generate(totp.GenerateOpts{Issuer: "ssh-ca", AccountName: name, Secret: secret})
+	key, err := totp.Generate(totp.GenerateOpts{Issuer: "shaka", AccountName: name, Secret: secret})
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func enrol(query, name, principals string, admin bool, pw []byte) (*otp.Key, err
 // copy of the database, needing access to the bucket, so it is also the way back in if every admin is locked out.
 func addUser(name, principals string) {
 	if name == "" || principals == "" {
-		log.Fatal("usage: ssh-ca-web adduser NAME root,hope")
+		log.Fatal("usage: shaka adduser NAME root,hope")
 	}
 	check(validUser(name, principals))
 	fmt.Fprint(os.Stderr, "password (12+ chars): ")

@@ -1,4 +1,4 @@
-# SSH CA
+# shaka
 
 OpenSSH certificate authority, with a web UI that runs on Google Cloud Run. Clients (personal devices) get short-lived certs so servers trust the CA instead of individual keys.
 
