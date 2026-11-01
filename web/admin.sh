@@ -17,7 +17,14 @@ cd "$(dirname "$0")"
 gcloud auth application-default print-access-token >/dev/null 2>&1 ||
   { echo "Run 'gcloud auth application-default login' first." >&2; exit 1; }
 
+# The temporary copy holds password hashes and authenticator secrets, and a paused service
+# is an outage, so clean up and resume however the script ends, Ctrl-C included.
 WORK=$(mktemp -d)
+resume() {
+  rm -rf "$WORK"
+  gcloud run services update "$SERVICE" --region "$REGION" --scaling=auto --max-instances 1 ||
+    echo "Resume failed. Run: gcloud run services update $SERVICE --region $REGION --scaling=auto --max-instances 1" >&2
+}
 cat > "$WORK/litestream.yml" <<EOF
 dbs:
   - path: $WORK/ca.db
@@ -25,13 +32,11 @@ dbs:
       url: gs://$BUCKET/ca.db
 EOF
 
+trap resume EXIT
 gcloud run services update "$SERVICE" --region "$REGION" --scaling=0
-trap 'echo "The service is still paused. Resume it with: gcloud run services update $SERVICE --region $REGION --scaling=auto --max-instances 1" >&2' ERR
 sleep 15 # give the last instance time to upload its final writes
 
 $LITESTREAM restore -config "$WORK/litestream.yml" -if-replica-exists "$WORK/ca.db"
 go run . -db "$WORK/ca.db" adduser "$NAME" "$PRINCIPALS"
 $LITESTREAM replicate -config "$WORK/litestream.yml" -once
 
-gcloud run services update "$SERVICE" --region "$REGION" --scaling=auto --max-instances 1
-rm -rf "$WORK"

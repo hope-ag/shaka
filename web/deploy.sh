@@ -31,14 +31,16 @@ gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" \
 
 if ! gcloud secrets describe ssh-ca-key >/dev/null 2>&1; then
   : "${CA_KEY:?first run: set CA_KEY to the CA private key file (user_ca)}"
-  gcloud secrets create ssh-ca-key --data-file="$CA_KEY" --replication-policy=automatic
   # The service has no terminal to prompt on, so an encrypted key needs its passphrase stored too.
+  # Check it against the key first: a typo stored here would stop the service from ever starting.
   if ! ssh-keygen -y -P "" -f "$CA_KEY" >/dev/null 2>&1; then
     printf 'CA key passphrase: ' >&2
     read -rs CA_PASS
     printf '\n' >&2
+    ssh-keygen -y -P "$CA_PASS" -f "$CA_KEY" >/dev/null 2>&1 || { echo "Wrong passphrase." >&2; exit 1; }
     printf %s "$CA_PASS" | gcloud secrets create ssh-ca-pass --data-file=- --replication-policy=automatic
   fi
+  gcloud secrets create ssh-ca-key --data-file="$CA_KEY" --replication-policy=automatic
 fi
 grant() {
   gcloud secrets add-iam-policy-binding "$1" \
@@ -57,7 +59,6 @@ fi
 gcloud run deploy "$SERVICE" --source . --region "$REGION" \
   --service-account "$SA" --allow-unauthenticated \
   --min-instances 0 --max-instances 1 --memory 256Mi --cpu 1 \
-  --execution-environment gen2 \
   --set-secrets "$SECRETS" --set-env-vars "$ENV"
 
 if ! gcloud beta run domain-mappings describe --domain "$DOMAIN" --region "$REGION" >/dev/null 2>&1; then
