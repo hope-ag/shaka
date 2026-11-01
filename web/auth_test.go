@@ -16,6 +16,7 @@ func TestClientIP(t *testing.T) {
 		{[]string{"9.9.9.9, 203.0.113.9"}, "203.0.113.9"},
 		{[]string{"9.9.9.9", "8.8.8.8,203.0.113.9"}, "203.0.113.9"},
 		{[]string{"9.9.9.9,"}, "192.0.2.1"},
+		{[]string{"9.9.9.9, not-an-ip"}, "192.0.2.1"},
 	} {
 		r := httptest.NewRequest("POST", "/api/login", nil)
 		for _, v := range c.xff {

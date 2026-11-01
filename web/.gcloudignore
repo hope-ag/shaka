@@ -1,0 +1,10 @@
+# deploy.sh uploads this folder to Cloud Build. Send only what the image needs,
+# so a stray key or database file here never leaves the machine.
+*
+!Dockerfile
+!litestream.yml
+!go.mod
+!go.sum
+!*.go
+!index.html
+!app.js

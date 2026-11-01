@@ -12,11 +12,10 @@ OpenSSH certificate authority, with a web UI that runs on Google Cloud Run. Clie
 ```bash
 mkdir -p ~/ssh-ca && chmod 700 ~/ssh-ca
 ssh-keygen -t ed25519 -f ~/ssh-ca/user_ca -C "user-ca"   # strong passphrase
-ssh-keygen -t ed25519 -f ~/ssh-ca/host_ca -C "host-ca"
 ```
 
-- Back up both private keys offline (password manager / encrypted USB). Losing them = re-trusting every server.
-- The web UI (section 7) keeps its own copy of `user_ca` in Secret Manager. `host_ca` never needs to leave your machine.
+- Back up the private key offline, in a password manager or on an encrypted USB drive. Losing it means re-trusting every server.
+- The web UI (section 6) keeps its own copy of `user_ca` in Secret Manager.
 
 ## 2. Trust the CA on each Hetzner server (once)
 
@@ -29,7 +28,7 @@ sudo touch /etc/ssh/revoked_keys
 sudo sshd -t && sudo systemctl reload ssh
 ```
 
-If you use the web UI (section 7), the **Trust this CA on your servers** card can copy `user_ca.pub` or download it for you.
+If you use the web UI (section 6), the **Trust this CA on your servers** card can copy `user_ca.pub` or download it for you.
 
 Keep existing `authorized_keys` until cert login is tested. Loop over servers with a script/Ansible.
 
@@ -41,7 +40,7 @@ On the device:
 ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519
 ```
 
-Sign `id_ed25519.pub` with the CA key, or use the web UI (section 7):
+Sign `id_ed25519.pub` with the CA key, or use the web UI (section 6):
 
 ```bash
 ssh-keygen -s ~/ssh-ca/user_ca -I "hope-laptop-2026" -n root,hope -V +7d id_ed25519.pub
@@ -54,29 +53,9 @@ Copy `id_ed25519-cert.pub` back to the device's `~/.ssh/`. `ssh root@server` jus
 ## 4. Lost device
 
 - Wait for the cert to expire, or revoke now: append its **public key** to `/etc/ssh/revoked_keys` on every server.
-- If you use the web UI (section 7), click **Revoke key** next to the device. Every server picks up the change within five minutes.
+- If you use the web UI (section 6), click **Revoke key** next to the device. Every server picks up the change within five minutes.
 
-## 5. Host certs (optional)
-
-On the machine that holds `host_ca`, sign each server's host key:
-
-```bash
-ssh-keygen -s ~/ssh-ca/host_ca -I server1 -h -n server1.example.com,1.2.3.4 -V +52w ssh_host_ed25519_key.pub
-```
-
-On the server, put the cert in `/etc/ssh/` and add:
-
-```
-HostCertificate /etc/ssh/ssh_host_ed25519_key-cert.pub
-```
-
-On devices, one `~/.ssh/known_hosts` line replaces all host prompts:
-
-```
-@cert-authority *.example.com,1.2.3.* ssh-ed25519 AAAA...(contents of host_ca.pub)
-```
-
-## 6. Break-glass
+## 5. Break-glass
 
 If the web UI is down you can still sign by hand with the offline key (section 3). Keep:
 
@@ -86,9 +65,9 @@ If the web UI is down you can still sign by hand with the offline key (section 3
 
 ## Later: automate signing
 
-Manual re-signing every 7 days gets old. The web UI (section 7) covers this. [Smallstep step-ca](https://smallstep.com/docs/step-ca/) + Google OIDC → `step ssh login you@gmail.com` issues a ~16h cert. Same `TrustedUserCAKeys` on servers.
+Manual re-signing every 7 days gets old. The web UI (section 6) covers this. [Smallstep step-ca](https://smallstep.com/docs/step-ca/) + Google OIDC → `step ssh login you@gmail.com` issues a ~16h cert. Same `TrustedUserCAKeys` on servers.
 
-## 7. Web UI (`web/`)
+## 6. Web UI (`web/`)
 
 The web UI lets you sign keys, revoke them and manage users from a browser instead of the command line. You log in with a password and a code from an authenticator app. It is a single Go binary that keeps everything in SQLite.
 

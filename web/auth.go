@@ -29,10 +29,9 @@ var (
 func clientIP(r *http.Request) string {
 	// Cloud Run's front end appends the address it saw to X-Forwarded-For, so only the last
 	// entry is trustworthy; anything before it came from the client and could be made up.
-	if v := r.Header.Values("X-Forwarded-For"); len(v) > 0 {
-		last := v[len(v)-1]
-		if ip := strings.TrimSpace(last[strings.LastIndex(last, ",")+1:]); ip != "" {
-			return ip
+	if v := strings.Join(r.Header.Values("X-Forwarded-For"), ","); v != "" {
+		if ip := net.ParseIP(strings.TrimSpace(v[strings.LastIndex(v, ",")+1:])); ip != nil {
+			return ip.String()
 		}
 	}
 	host, _, _ := net.SplitHostPort(r.RemoteAddr)
