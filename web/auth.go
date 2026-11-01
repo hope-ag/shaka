@@ -124,7 +124,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	step, codeOK := verifyTOTP(secret, code, last, time.Now())
 	if err != nil || !pwOK || !codeOK {
 		throttled(ip, true)
-		// Only in the server's journal (root-only). Says which factor failed, so a
+		// Only in the Cloud Run logs, which need project access. Says which factor failed, so a
 		// lockout is diagnosable without weakening what the browser is told.
 		log.Printf("login failed user=%q ip=%s user_found=%t password_ok=%t code_ok=%t now_step=%d last_step=%d",
 			name, ip, err == nil, pwOK, codeOK, time.Now().Unix()/30, last)
