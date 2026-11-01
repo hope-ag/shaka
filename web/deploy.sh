@@ -37,7 +37,15 @@ if ! gcloud secrets describe ssh-ca-key >/dev/null 2>&1; then
     printf 'CA key passphrase: ' >&2
     read -rs CA_PASS
     printf '\n' >&2
-    ssh-keygen -y -P "$CA_PASS" -f "$CA_KEY" >/dev/null 2>&1 || { echo "Wrong passphrase." >&2; exit 1; }
+    # ssh-keygen -P would put the passphrase in the process list, so hand it over through an
+    # askpass helper that reads it from the environment, which only this user can see.
+    ASK=$(mktemp)
+    printf '#!/bin/sh\nprintf "%%s\\n" "$CA_PASS"\n' > "$ASK"
+    chmod 700 "$ASK"
+    CA_PASS=$CA_PASS SSH_ASKPASS=$ASK SSH_ASKPASS_REQUIRE=force DISPLAY=:0 \
+      ssh-keygen -y -f "$CA_KEY" </dev/null >/dev/null 2>&1 && OK=1 || OK=
+    rm -f "$ASK"
+    [ -n "$OK" ] || { echo "Wrong passphrase." >&2; exit 1; }
     printf %s "$CA_PASS" | gcloud secrets create ssh-ca-pass --data-file=- --replication-policy=automatic
   fi
   gcloud secrets create ssh-ca-key --data-file="$CA_KEY" --replication-policy=automatic
