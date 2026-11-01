@@ -112,7 +112,7 @@ const app = createApp({
     })
 
     const revoke = c => {
-      if (!confirm(`Revoke ${c.identity}? Every certificate for this key stops working, and the key can't be signed again.`)) return
+      if (!confirm(`Revoke ${c.identity}? Every certificate for this key will stop working, and you won't be able to sign the key again.`)) return
       run(async () => {
         await api('POST', `/api/certs/${c.serial}/revoke`)
         certs.value = await api('GET', '/api/certs')
@@ -141,7 +141,7 @@ const app = createApp({
     })
 
     const removeUser = u => {
-      if (!confirm(`Remove ${u.name}? Their sessions end now, and every key they ever had signed is revoked.`)) return
+      if (!confirm(`Remove ${u.name}? They will be logged out immediately, and every key they ever had signed will be revoked.`)) return
       run(async () => {
         await api('DELETE', `/api/users/${encodeURIComponent(u.name)}`)
         users.value = await api('GET', '/api/users')
