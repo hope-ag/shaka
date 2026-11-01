@@ -115,4 +115,6 @@ Each Hetzner server needs to download the list of banned keys. Add this line to 
 */5 * * * * curl -fsS https://ca.example.com/revoked_keys -o /etc/ssh/revoked_keys.new && mv /etc/ssh/revoked_keys.new /etc/ssh/revoked_keys
 ```
 
+Fedora doesn't ship cron, so install it there first with `dnf install -y cronie && systemctl enable --now crond`. A download that fails leaves the previous list in place, and sshd reads the file on every login, so nothing needs restarting.
+
 When you click **Revoke key**, the app bans the public key itself rather than a single certificate. Every certificate ever issued for that key stops working, and the app will refuse to sign that key again.
