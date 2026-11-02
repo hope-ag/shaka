@@ -3,6 +3,7 @@
 > He is the king, everything goes through him.
 
 [Rocky Linux SSH certificate Docs](https://docs.rockylinux.org/10/guides/security/ssh_ca_key_signing/)
+
 OpenSSH certificate authority in a single Go binary, with a web UI that runs on Google Cloud Run.
 Clients (personal devices) are issued signed, short-lived certs by Shaka so servers trust Shaka instead of individual keys.
 
